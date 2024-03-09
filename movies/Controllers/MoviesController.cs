@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Http;
+﻿using AutoMapper;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using movies.Dtos;
@@ -14,28 +15,31 @@ namespace movies.Controllers
 	public class MoviesController : ControllerBase
     {
         //inject
-        public readonly IMoviesService _moviesService;
-        public readonly IGenresService _genresService;
-        public readonly ILogger<MoviesController> _logger;
+        private readonly IMapper _mapper;
+        private readonly IMoviesService _moviesService;
+        private readonly IGenresService _genresService;
+        private readonly ILogger<MoviesController> _logger;
 
 
-		public MoviesController(IMoviesService moviesService, IGenresService genresService, ILogger<MoviesController> logger)
-		{
-			_moviesService = moviesService;
-			_genresService = genresService;
-			_logger = logger;
-		}
+        public MoviesController(IMoviesService moviesService, IGenresService genresService, ILogger<MoviesController> logger, IMapper mapper)
+        {
+            _moviesService = moviesService;
+            _genresService = genresService;
+            _logger = logger;
+            _mapper = mapper;
+        }
 
-		public new List<string> _validExtentions = new List<string> { ".jpg", ".png" };
+        public new List<string> _validExtentions = new List<string> { ".jpg", ".png" };
         public long _maxsize = 1024 * 1024;
 
         [HttpGet]
         public async Task<IActionResult> GetAllMovies()
         {
-            
-            var movie = await _moviesService.GetAllMovies();
-            
-            return Ok(movie);
+
+            var movies = await _moviesService.GetAllMovies();
+
+            var data = _mapper.Map<IEnumerable<MoviesDetailsDto>>(movies);
+            return Ok(data);
         }
 
 
@@ -61,17 +65,7 @@ namespace movies.Controllers
             }
 
             //MoviesDetailsDto ==> to include genre name not in object
-            var dto = new MoviesDetailsDto
-            {
-                Rate = movie.Rate, 
-                Title = movie.Title,
-                GenreId = movie.GenreId,
-                GenreName = movie.Genre?.Name,
-                Poster = movie.Poster,
-                Id = movie.Id,
-                StoreLine = movie.StoreLine,
-                year = movie.year
-            };
+            var dto = _mapper.Map<MoviesDetailsDto>(movie);
 
             return Ok(dto);
         }
@@ -80,15 +74,15 @@ namespace movies.Controllers
         public async Task<IActionResult> GetAllMoviesByGenreId(byte id)
         {
 
-            var genre = await _genresService.GetById(id);
+            var movie = await _genresService.GetById(id);
 
-            if (genre == null)
+            if (movie == null)
             {
                 return NotFound("movie not found");
             }
-            var movies = await _moviesService.GetAllMovies(id);
+            var dto = _mapper.Map<MoviesDetailsDto>(movie);
 
-            return Ok(movies);
+            return Ok(dto);
         }
 
         [HttpPost]
@@ -112,17 +106,8 @@ namespace movies.Controllers
 
             using var datastream = new MemoryStream();
             await dto.Poster.CopyToAsync(datastream);
-            var movie = new Movie
-            {
-                GenreId = dto.GenreId,
-                Rate = dto.Rate,
-                Title = dto.Title,
-                StoreLine = dto.StoreLine,
-                year = dto.year,
-                Poster = datastream.ToArray()
-            };
-
-
+            var movie = _mapper.Map<Movie>(dto);
+            movie.Poster = datastream.ToArray();
 
             await _moviesService.Create(movie);
 
